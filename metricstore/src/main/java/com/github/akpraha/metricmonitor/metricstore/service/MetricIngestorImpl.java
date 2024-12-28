@@ -51,12 +51,12 @@ public class MetricIngestorImpl implements MetricIngestor {
     @Override
     public void ingest(List<MetricSeriesDataTuple> data) {
         if (!running) {
-            throw new RuntimeException("Service not running");
+            throw new IllegalStateException("Service not running");
         }
         lock.writeLock().lock();
         try {
             data.forEach(msdt -> {
-                ingestionBuffer.computeIfAbsent(msdt.uuid(), (uuid) -> new ArrayList<>()).add(msdt.values());
+                ingestionBuffer.computeIfAbsent(msdt.getUuid(), (uuid) -> new ArrayList<>()).add(msdt.getValues());
             });
         } finally {
             lock.writeLock().unlock();
@@ -85,7 +85,7 @@ public class MetricIngestorImpl implements MetricIngestor {
             // same series
             ingestionBuffer.keySet().forEach(key -> {
                 List<long[]> values = ingestionBuffer.get(key);
-                ingested.put(key, new ArrayList(values));
+                ingested.put(key, new ArrayList<>(values));
                 values.clear();
             });
         } finally {
@@ -99,7 +99,7 @@ public class MetricIngestorImpl implements MetricIngestor {
                     list.add(new MetricValue(timestamp, v));
                 });
             });
-            if (list.size() > 0) {
+            if (!list.isEmpty()) {
                 metricStoreSvc.storeMetricData(uuid, list);
             }
         });

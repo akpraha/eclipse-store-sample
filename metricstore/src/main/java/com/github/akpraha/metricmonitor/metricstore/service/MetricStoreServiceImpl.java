@@ -4,9 +4,11 @@ import com.github.akpraha.metricmonitor.metricstore.domain.MetricSeriesNode;
 import com.github.akpraha.metricmonitor.metricstore.domain.MetricDefinition;
 import com.github.akpraha.metricmonitor.metricstore.domain.MetricSeries;
 import com.github.akpraha.metricmonitor.metricstore.domain.MetricValue;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +16,8 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
+import org.eclipse.store.storage.embedded.types.EmbeddedStorage;
+import org.eclipse.store.storage.embedded.types.EmbeddedStorageManager;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,9 +28,21 @@ import org.springframework.stereotype.Component;
 public class MetricStoreServiceImpl implements MetricStoreService {
     private final ReentrantReadWriteLock readWriteLock = new ReentrantReadWriteLock();
     private Storage storage;
+    private final EmbeddedStorageManager storageManager;
 
-    public MetricStoreServiceImpl() {
-        storage = new Storage(new HashMap<>(), new HashMap<>(), new HashMap<>());
+    public MetricStoreServiceImpl(EmbeddedStorageManager storageManager) {
+        // Under the hood, this is what the spring boot integration is doing for you
+        /*
+        storageManager = EmbeddedStorage.start(Paths.get("demo"));
+        storage = (Storage) storageManager.root();
+        if (storage == null) {
+            storage = new Storage();
+            storageManager.setRoot(storage);
+            storageManager.storeRoot();
+        }
+        */
+        this.storageManager = storageManager;
+        storage = (Storage) storageManager.root();
     }
 
     public MetricDefinition createMetricDefinition(String name, List<String> dimensions) {
@@ -46,6 +62,7 @@ public class MetricStoreServiceImpl implements MetricStoreService {
                     .build();
 
             storage.getMetricDefinitionMap().put(name, metricDefinition);
+            storageManager.store(storage.getMetricDefinitionMap());
             return metricDefinition;
         } finally {
             readWriteLock.writeLock().unlock();
@@ -93,6 +110,8 @@ public class MetricStoreServiceImpl implements MetricStoreService {
             }
             node.setMetricSeriesID(metricSeries.getId());
 
+            storageManager.store(storage.getMetricSeriesMap());
+            storageManager.store(storage.getMetricSeriesUUIDMap());
             return metricSeries.getId();
         } finally {
             readWriteLock.writeLock().unlock();
@@ -131,6 +150,7 @@ public class MetricStoreServiceImpl implements MetricStoreService {
         try {
             MetricSeries metricSeries = storage.getMetricSeriesUUIDMap().get(uuid);
             metricSeries.getTimeSeriesData().addAll(data);
+            storageManager.store(metricSeries.getTimeSeriesData());
         } finally {
             readWriteLock.writeLock().unlock();
         }
@@ -142,6 +162,9 @@ public class MetricStoreServiceImpl implements MetricStoreService {
         try {
             Instant endTime = startTime.plusMillis(durationMs);
             MetricSeries metricSeries = storage.getMetricSeriesUUIDMap().get(uuid);
+            if (metricSeries == null) {
+                throw new EntityNotFoundException("Metric Series " + uuid + " not found");
+            }
             return metricSeries.getTimeSeriesData().stream().filter(mv -> inRange(mv, startTime, endTime))
                     .collect(Collectors.toList());
         } finally {
@@ -150,8 +173,8 @@ public class MetricStoreServiceImpl implements MetricStoreService {
     }
 
     private boolean inRange(MetricValue metricValue, Instant start, Instant end) {
-        return start.equals(metricValue.timestamp()) || end.equals(metricValue.timestamp()) ||
-                (start.isBefore(metricValue.timestamp()) && end.isAfter(metricValue.timestamp()));
+        Instant ts = metricValue.getTimestamp();
+        return start.equals(ts) || end.equals(ts) || (start.isBefore(ts) && end.isAfter(ts));
     }
 
     private Collection<MetricSeries> findMetricSeries(final List<String> dimensionNames, final Map<String, String> dimensions, MetricSeriesNode node) {

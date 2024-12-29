@@ -9,9 +9,12 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.eclipse.store.storage.embedded.types.EmbeddedStorageManager;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 
 import static java.util.Map.entry;
 
@@ -22,10 +25,13 @@ import static java.util.Map.entry;
 public class MetricStoreServiceTest {
     public static final String METRIC_ONE = "metric.one";
     private MetricStoreService metricStoreService;
+    @Mock
+    private EmbeddedStorageManager embeddedStorageManager;
+
 
     @BeforeEach
     public void setup() {
-        metricStoreService = new MetricStoreServiceImpl();
+        metricStoreService = new MetricStoreServiceImpl(embeddedStorageManager);
     }
 
     @Test

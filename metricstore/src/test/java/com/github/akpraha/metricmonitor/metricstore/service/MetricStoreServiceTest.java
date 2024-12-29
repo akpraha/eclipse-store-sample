@@ -13,10 +13,11 @@ import org.eclipse.store.storage.embedded.types.EmbeddedStorageManager;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import static java.util.Map.entry;
+import static org.mockito.Mockito.*;
 
 /**
  * @author Andy Key
@@ -31,6 +32,9 @@ public class MetricStoreServiceTest {
 
     @BeforeEach
     public void setup() {
+        MockitoAnnotations.openMocks(this);
+        Storage storage = new Storage();
+        when(embeddedStorageManager.root()).thenReturn(storage);
         metricStoreService = new MetricStoreServiceImpl(embeddedStorageManager);
     }
 
